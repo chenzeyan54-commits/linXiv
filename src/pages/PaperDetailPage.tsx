@@ -251,13 +251,7 @@ export default function PaperDetailPage() {
       if (!pdfPreviewDocRef.current) throw new Error("PDF not loaded");
       const bytes = await pdfPreviewDocRef.current.getData();
       const path = `/api/papers/${encodeURIComponent(sourceId)}/pdf`;
-      if (isTauri) {
-        await libraryFetch(path, { method: "PUT", body: JSON.stringify({ file_b64: bytesToBase64(bytes) } satisfies UploadPdfBody) });
-      } else {
-        const form = new FormData();
-        form.append("file", new Blob([bytes.slice()], { type: "application/pdf" }), `${sourceId}.pdf`);
-        await libraryFetch(path, { method: "PUT", body: form });
-      }
+      await libraryFetch(path, { method: "PUT", body: JSON.stringify({ file_b64: bytesToBase64(bytes) } satisfies UploadPdfBody) });
     },
     onSuccess: () => {
       invalidatePaperMutationQueries(queryClient);
@@ -267,14 +261,8 @@ export default function PaperDetailPage() {
   const linkPdfMutation = useMutation({
     mutationFn: async ({ sourceId, file }: { sourceId: string; file: File }) => {
       const path = `/api/papers/${encodeURIComponent(sourceId)}/pdf`;
-      if (isTauri) {
-        const file_b64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
-        await libraryFetch(path, { method: "PUT", body: JSON.stringify({ file_b64 } satisfies UploadPdfBody) });
-      } else {
-        const form = new FormData();
-        form.append("file", file, file.name);
-        await libraryFetch(path, { method: "PUT", body: form });
-      }
+      const file_b64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+      await libraryFetch(path, { method: "PUT", body: JSON.stringify({ file_b64 } satisfies UploadPdfBody) });
     },
     onSuccess: () => {
       invalidatePaperMutationQueries(queryClient);
