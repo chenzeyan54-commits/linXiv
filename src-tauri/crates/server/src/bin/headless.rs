@@ -24,6 +24,7 @@ use axum::{
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use tracing_subscriber::EnvFilter;
 
 use linxiv_core::service::db_admin;
 use linxiv_core::storage::ImportReport;
@@ -92,6 +93,12 @@ fn seed_relay_from_env() {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
     let started = Instant::now();
     let data_dir = linxiv_core::config::init_data_dir().expect("init data dir");
     eprintln!("linxiv headless: data dir {}", data_dir.display());

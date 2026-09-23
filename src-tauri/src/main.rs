@@ -7,6 +7,7 @@ use linxiv_app::{commands, integrations, protocol, remote_backend, route};
 
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
+use tracing_subscriber::EnvFilter;
 
 /// Open a locally-stored PDF in the OS default viewer.
 ///
@@ -64,6 +65,12 @@ fn main() {
     if std::env::var_os("WEBKIT_SKIA_GPU_PAINTING_THREADS").is_none() {
         std::env::set_var("WEBKIT_SKIA_GPU_PAINTING_THREADS", "0");
     }
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
     tauri::Builder::default()
         // Prevent a second linXiv process from opening shared resources such as
         // the P2P blob database. Focus the existing window instead.

@@ -42,6 +42,8 @@ serde = { version = "1", features = ["derive"] }
 # client config files and must not re-sort their keys.
 serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1", features = ["full"] }
+# Stderr logs for core's `tracing` events (import failures etc.); RUST_LOG filters.
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # The shared backend (router, state, share sync, remote-query node half) — the
 # Tauri-free half of what used to live in this crate.
 linxiv-server = { path = "crates/server" }
