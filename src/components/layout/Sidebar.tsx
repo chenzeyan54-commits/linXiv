@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { NavLink } from "react-router";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router";
 import {
   Home,
   BookOpen,
@@ -25,6 +25,8 @@ import { useImportJobsStore } from "../../stores/importJobs";
 import { useBackendStore } from "../../stores/backend";
 import { remoteIndicatorLabel } from "../../lib/remoteBackend";
 import { Spinner } from "../ui/spinner";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { AddPaperForm } from "../import/AddPaperForm";
 
 interface NavItem {
   to: string;
@@ -55,6 +57,55 @@ const NAV_ITEMS: NavItem[] = [
 
 const EXPANDED_W = 160;
 const COLLAPSED_W = 48;
+
+function navItemStyle(isActive: boolean, collapsed: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: collapsed ? "center" : "flex-start",
+    gap: 8,
+    padding: collapsed ? "8px 0" : "8px 12px",
+    borderRadius: 6,
+    fontSize: 13,
+    fontWeight: 500,
+    textDecoration: "none",
+    transition: "background-color 0.15s, color 0.15s",
+    backgroundColor: isActive ? "var(--color-accent)" : "transparent",
+    color: isActive ? "white" : "var(--color-muted)",
+  };
+}
+
+// Hover tint for inactive items; active ones (current route or open popover) keep white.
+function hoverColor(e: React.MouseEvent<HTMLElement>, color: string) {
+  const el = e.currentTarget;
+  if (!el.getAttribute("aria-current") && el.dataset.state !== "open") {
+    el.style.color = color;
+  }
+}
+
+// "Add Paper" opens the add flow in place; the /doi page stays for deep links.
+function AddPaperNavItem({ label, icon, collapsed }: { label: string; icon: React.ReactNode; collapsed: boolean }) {
+  const [open, setOpen] = useState(false);
+  const onDoiPage = useLocation().pathname === "/doi";
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        type="button"
+        title={collapsed ? label : undefined}
+        aria-label={collapsed ? label : undefined}
+        style={{ ...navItemStyle(open || onDoiPage, collapsed), border: "none", cursor: "pointer" }}
+        onMouseEnter={(e) => hoverColor(e, "var(--color-text)")}
+        onMouseLeave={(e) => hoverColor(e, "var(--color-muted)")}
+      >
+        {icon}
+        {!collapsed && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
+      </PopoverTrigger>
+      <PopoverContent side="right" align="start" aria-label="Add Paper" className="w-[400px] p-4">
+        <AddPaperForm compact />
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // Unmistakable "you're viewing a remote library" pill (remote mode is
 // online-only, opposite of local-first shares — surface which backend you're
@@ -222,38 +273,17 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 flex flex-col gap-1" onContextMenu={handleNavContextMenu}>
-        {NAV_ITEMS.filter(({ pageKey }) => !pageKey || sidebarPages[pageKey]).map(({ to, label, icon, end }) => (
+        {NAV_ITEMS.filter(({ pageKey }) => !pageKey || sidebarPages[pageKey]).map(({ to, label, icon, end }) => to === "/doi" ? (
+          <AddPaperNavItem key={to} label={label} icon={icon} collapsed={sidebarCollapsed} />
+        ) : (
           <NavLink
             key={to}
             to={to}
             end={end}
             title={sidebarCollapsed ? label : undefined}
-            style={({ isActive }) => ({
-              display: "flex",
-              alignItems: "center",
-              justifyContent: sidebarCollapsed ? "center" : "flex-start",
-              gap: 8,
-              padding: sidebarCollapsed ? "8px 0" : "8px 12px",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-              transition: "background-color 0.15s, color 0.15s",
-              backgroundColor: isActive ? "var(--color-accent)" : "transparent",
-              color: isActive ? "white" : "var(--color-muted)",
-            })}
-            onMouseEnter={(e) => {
-              const el = e.currentTarget as HTMLAnchorElement;
-              if (!el.getAttribute("aria-current")) {
-                el.style.color = "var(--color-text)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              const el = e.currentTarget as HTMLAnchorElement;
-              if (!el.getAttribute("aria-current")) {
-                el.style.color = "var(--color-muted)";
-              }
-            }}
+            style={({ isActive }) => navItemStyle(isActive, sidebarCollapsed)}
+            onMouseEnter={(e) => hoverColor(e, "var(--color-text)")}
+            onMouseLeave={(e) => hoverColor(e, "var(--color-muted)")}
           >
             {icon}
             {!sidebarCollapsed && <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
