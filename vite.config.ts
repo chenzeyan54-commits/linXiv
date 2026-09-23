@@ -1,14 +1,24 @@
-import { defineConfig } from "vite";
+import { createLogger, defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
 const host = process.env.TAURI_DEV_HOST;
+
+// MathJax ships sourcemaps whose sources aren't in the npm package; Vite warns
+// once per font file. Drop just that noise.
+const logger = createLogger();
+const warnOnce = logger.warnOnce;
+logger.warnOnce = (msg, opts) => {
+  if (msg.includes("/@mathjax/") && msg.includes("points to missing source files")) return;
+  warnOnce(msg, opts);
+};
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },
+  customLogger: logger,
   clearScreen: false,
   server: {
     // 5180, not 5173: the embedded TeXbrain editor's dev server owns 5173

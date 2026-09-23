@@ -20,6 +20,9 @@ import {
 import { errText } from "../../lib/errText";
 
 
+/** Window event carrying dropped `File[]` to an open Import dialog. */
+export const DIALOG_DROP_EVENT = "linxiv:import-dialog-drop";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type FileKind = "pdf" | "bibtex" | "lxproj" | "unknown";
@@ -128,16 +131,15 @@ export function ImportDialog({ open, onClose, projectId, onDone, initialFiles }:
     void addFiles(initialFiles);
   }, [open, initialFiles]);
 
-  // While open, files dropped anywhere in the window join the queue.
+  // While open, files dropped anywhere in the window join the queue
+  // (GlobalFileDrop forwards them, in both browser and Tauri).
   useEffect(() => {
     if (!open) return;
-    function onDrop(e: DragEvent) {
-      if (!e.dataTransfer?.types.includes("Files")) return;
-      e.preventDefault();
-      void addFiles(Array.from(e.dataTransfer.files));
+    function onDrop(e: Event) {
+      void addFiles((e as CustomEvent<File[]>).detail);
     }
-    window.addEventListener("drop", onDrop);
-    return () => window.removeEventListener("drop", onDrop);
+    window.addEventListener(DIALOG_DROP_EVENT, onDrop);
+    return () => window.removeEventListener(DIALOG_DROP_EVENT, onDrop);
   }, [open]);
 
   async function addFiles(files: File[]) {
