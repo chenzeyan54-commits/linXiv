@@ -95,9 +95,11 @@ export interface ImportDialogProps {
   /** Called after all queued files finish processing. newProjectIds contains
    *  any project IDs created by .lxproj imports. */
   onDone: (newProjectIds: number[]) => void;
+  /** Files to queue when the dialog opens (e.g. dropped onto the window). */
+  initialFiles?: File[];
 }
 
-export function ImportDialog({ open, onClose, projectId, onDone }: ImportDialogProps) {
+export function ImportDialog({ open, onClose, projectId, onDone, initialFiles }: ImportDialogProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [rejectedFilenames, setRejectedFilenames] = useState<string[]>([]);
@@ -112,9 +114,34 @@ export function ImportDialog({ open, onClose, projectId, onDone }: ImportDialogP
     setQueue((prev) => prev.map((e) => (e.uid === uid ? { ...e, ...patch } : e)));
   }
 
-  async function handleFilePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const all = Array.from(e.target.files ?? []).map((f) => ({ f, kind: detectKind(f) }));
+  function handleFilePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
+    void addFiles(files);
+  }
+
+  // StrictMode runs effects twice; don't queue the same files again.
+  const addedInitial = useRef<File[] | undefined>(undefined);
+  useEffect(() => {
+    if (!open || !initialFiles || addedInitial.current === initialFiles) return;
+    addedInitial.current = initialFiles;
+    void addFiles(initialFiles);
+  }, [open, initialFiles]);
+
+  // While open, files dropped anywhere in the window join the queue.
+  useEffect(() => {
+    if (!open) return;
+    function onDrop(e: DragEvent) {
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      e.preventDefault();
+      void addFiles(Array.from(e.dataTransfer.files));
+    }
+    window.addEventListener("drop", onDrop);
+    return () => window.removeEventListener("drop", onDrop);
+  }, [open]);
+
+  async function addFiles(files: File[]) {
+    const all = files.map((f) => ({ f, kind: detectKind(f) }));
     if (!all.length) return; // picker cancelled — don't clear the existing rejection warning
     const withKind = all.filter((x): x is { f: File; kind: KnownFileKind } => x.kind !== "unknown");
     const rejected = all.filter(({ kind }) => kind === "unknown").map(({ f }) => f.name);
@@ -210,7 +237,7 @@ export function ImportDialog({ open, onClose, projectId, onDone }: ImportDialogP
       onClose={() => { reset(); onClose(); }}
       title="Import"
     >
-      <div className="flex flex-col gap-4" onKeyDown={submitOnCtrlEnter(handleImport)}>
+      <div data-import-dialog className="flex flex-col gap-4" onKeyDown={submitOnCtrlEnter(handleImport)}>
         {/* File picker */}
         <div>
           <input

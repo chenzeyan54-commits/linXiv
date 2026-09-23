@@ -2,6 +2,7 @@ import { Suspense, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { Sidebar } from "./Sidebar";
 import { UpdateBanner } from "./UpdateBanner";
+import { GlobalFileDrop } from "../import/GlobalFileDrop";
 import { LogoMark } from "../ui/logo-mark";
 import GraphPage from "../../pages/GraphPage";
 import EditorPage from "../../pages/EditorPage";
@@ -110,6 +111,7 @@ export default function AppShell() {
 
         <UpdateBanner />
       </main>
+      <GlobalFileDrop />
     </div>
   );
 }
