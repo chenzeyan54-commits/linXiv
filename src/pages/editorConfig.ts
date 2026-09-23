@@ -4,9 +4,9 @@
 //
 // ADR 0015 (LOCKED): the address derives from `import.meta.env.DEV`, NOT
 // `isTauri` — `tauri dev` is a Tauri webview that MUST use the dev address.
-//   dev:  http://localhost:5173/editor — the editor's own Vite dev server (the
-//         host owns 5180). Cross-origin like prod, no proxy, so origin bugs
-//         can't hide until release.
+//   dev:  $VITE_EDITOR_DEV_URL (default http://localhost:5173)/editor — the
+//         editor's own Vite dev server (the host owns 5180). Cross-origin like
+//         prod, no proxy, so origin bugs can't hide until release.
 //   prod: <texbrain scheme origin>/editor — the runtime-downloaded Editor
 //         plugin served by tauri-plugin-texbrain's scheme (ADR 0017/0016).
 // Only the /editor PATH is constant; the origin is environment-derived.
@@ -31,7 +31,7 @@ export function schemeOrigin(scheme: string): string {
  * accepts (guest -> host). Never '*' — the bridge is first-party app-to-app.
  */
 export const EDITOR_ORIGIN: string = import.meta.env.DEV
-  ? "http://localhost:5173"
+  ? new URL(import.meta.env.VITE_EDITOR_DEV_URL || "http://localhost:5173").origin
   : schemeOrigin("texbrain");
 
 /**
