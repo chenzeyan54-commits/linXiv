@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Upload } from "lucide-react";
-import { ImportDialog } from "./ImportDialog";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { isTauri } from "../../api/client";
+import { DIALOG_DROP_EVENT, ImportDialog } from "./ImportDialog";
 import { importBibtex, importPdf } from "../../api/exportImport";
 import { useImportJobsStore } from "../../stores/importJobs";
 import { invalidatePaperMutationQueries } from "../../lib/paperMutations";
@@ -19,9 +22,20 @@ function hasFiles(e: DragEvent) {
   return e.dataTransfer?.types.includes("Files") ?? false;
 }
 
-// An open Import dialog queues every drop itself.
 function importDialogOpen() {
   return document.querySelector(IMPORT_DIALOG_SELECTOR) !== null;
+}
+
+// Tauri hands drops over as paths. Core adds them to the asset-protocol scope
+// before emitting the event; plugin-fs scopes them later, so readFile can race.
+async function filesFromPaths(paths: string[]): Promise<File[]> {
+  return Promise.all(
+    paths.map(async (p) => {
+      const res = await fetch(convertFileSrc(p));
+      if (!res.ok) throw new Error(`${p}: HTTP ${res.status}`);
+      return new File([await res.blob()], p.split(/[\\/]/).pop() ?? p);
+    }),
+  );
 }
 
 /** Imports .pdf and .bib in the background; other formats fail as sidebar jobs. */
@@ -48,6 +62,7 @@ async function importDropped(files: File[], queryClient: QueryClient) {
       invalidatePaperMutationQueries(queryClient);
       updateJob(uid, { status: "done", result });
     } catch (err) {
+      console.error(`import ${file.name} failed:`, err);
       updateJob(uid, { status: "error", error: errText(err, String(err)) });
     }
   }
@@ -69,6 +84,35 @@ export function GlobalFileDrop() {
   const dialogOpen = dialogFiles !== null;
 
   useEffect(() => {
+    function handleFiles(files: File[]) {
+      if (!files.length) return;
+      if (importDialogOpen()) window.dispatchEvent(new CustomEvent(DIALOG_DROP_EVENT, { detail: files }));
+      else if (files.some(isLxproj)) setDialogFiles(files);
+      else void importDropped(files, queryClient);
+    }
+
+    // Tauri intercepts OS file drops before the DOM sees them (on Linux the
+    // webview would otherwise navigate to the file), so use its event instead.
+    if (isTauri) {
+      const unlisten = getCurrentWebview().onDragDropEvent(({ payload }) => {
+        if (payload.type === "enter" || payload.type === "over") {
+          setDragging(true);
+          return;
+        }
+        setDragging(false);
+        if (payload.type === "drop") {
+          filesFromPaths(payload.paths).then(handleFiles, (err: unknown) => {
+            console.error("reading dropped files failed:", err);
+            const { addJobs, updateJob } = useImportJobsStore.getState();
+            const uid = nextUid();
+            addJobs([{ uid, filename: payload.paths.join(", ") }]);
+            updateJob(uid, { status: "error", error: errText(err, String(err)) });
+          });
+        }
+      });
+      return () => { void unlisten.then((f) => f()); };
+    }
+
     // dragenter/dragleave fire for every element crossed; count them to know
     // when the drag has actually left the window.
     let depth = 0;
@@ -93,11 +137,7 @@ export function GlobalFileDrop() {
       setDragging(false);
       if (!hasFiles(e)) return;
       e.preventDefault();
-      if (importDialogOpen()) return;
-      const files = Array.from(e.dataTransfer?.files ?? []);
-      if (!files.length) return;
-      if (files.some(isLxproj)) setDialogFiles(files);
-      else void importDropped(files, queryClient);
+      handleFiles(Array.from(e.dataTransfer?.files ?? []));
     }
     function onDragEnd() {
       depth = 0;
