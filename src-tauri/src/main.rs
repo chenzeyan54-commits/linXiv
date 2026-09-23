@@ -57,6 +57,13 @@ fn menu_popup_offset() -> (i32, i32) {
 }
 
 fn main() {
+    // ponytail: WebKit/Mesa shutdown race (libEGL __eglFini frees EGL state under
+    // a Skia GPU painting thread's TLS destructor) segfaults WebKitWebProcess on
+    // close/reset. Set before the web process spawns; drop once fixed upstream.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_SKIA_GPU_PAINTING_THREADS").is_none() {
+        std::env::set_var("WEBKIT_SKIA_GPU_PAINTING_THREADS", "0");
+    }
     tauri::Builder::default()
         // Prevent a second linXiv process from opening shared resources such as
         // the P2P blob database. Focus the existing window instead.
