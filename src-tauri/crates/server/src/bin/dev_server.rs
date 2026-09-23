@@ -10,6 +10,7 @@ use axum::{
     routing::any,
     Router,
 };
+use tracing_subscriber::EnvFilter;
 
 use linxiv_server::route::{route, ApiRequest};
 use linxiv_server::state::AppState;
@@ -20,6 +21,12 @@ const ADDR: &str = "127.0.0.1:8000";
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
     let state = Arc::new(AppState::new().expect("init app state"));
     linxiv_server::journal::spawn_journal_loop(state.clone());
     let app = Router::new().fallback(any(dispatch)).with_state(state);
@@ -46,9 +53,11 @@ async fn dispatch(State(state): State<Arc<AppState>>, req: Request) -> Response 
         serde_json::from_slice(&bytes).ok()
     };
 
+    let label = format!("{method} {path}");
     match route(&state, ApiRequest { method, path, body }).await {
         Ok(value) => json(StatusCode::OK, &value),
         Err(e) => {
+            eprintln!("[dev shim] {label} -> {}: {}", e.status, e.detail);
             let status =
                 StatusCode::from_u16(e.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
             json(status, &serde_json::json!({ "detail": e.detail }))

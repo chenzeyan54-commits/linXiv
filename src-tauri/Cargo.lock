@@ -3968,6 +3968,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "tokio",
+ "tracing-subscriber",
  "url",
  "winreg 0.52.0",
 ]
@@ -4090,6 +4091,7 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http",
+ "tracing-subscriber",
  "ts-rs",
  "wiremock",
  "zbus 4.4.0",

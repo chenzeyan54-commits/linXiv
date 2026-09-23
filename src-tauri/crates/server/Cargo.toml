@@ -42,6 +42,8 @@ ts-rs = { version = "12", features = ["chrono-impl"] }
 # preserve_order: response envelopes are pinned key-for-key (see route/mod.rs).
 serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1", features = ["full"] }
+# Stderr logs for core's `tracing` events (import failures etc.); RUST_LOG filters.
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # HTTP front doors: the dev-server shim and the headless bin.
 axum = "0.8"
 # gzip for the headless bin's JSON responses (Accept-Encoding negotiated).
