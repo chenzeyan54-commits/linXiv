@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Document, Page, pdfjs } from "react-pdf";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { fetchArxiv } from "../api/search";
-import { bytesToBase64, isTauri } from "../api/client";
+import { bytesToBase64 } from "../api/client";
 import { libraryFetch } from "../stores/backend";
 import { getPdfProxyUrl } from "../api/papers";
 import { Button } from "../components/ui/button";
@@ -80,13 +80,7 @@ export default function PdfPreviewPage() {
         try {
           const bytes = await pdfDocRef.current.getData();
           const path = `/api/papers/${encodeURIComponent(sourceId)}/pdf`;
-          if (isTauri) {
-            await libraryFetch(path, { method: "PUT", body: JSON.stringify({ file_b64: bytesToBase64(bytes) } satisfies UploadPdfBody) });
-          } else {
-            const form = new FormData();
-            form.append("file", new Blob([bytes.slice()], { type: "application/pdf" }), `${sourceId}.pdf`);
-            await libraryFetch(path, { method: "PUT", body: form });
-          }
+          await libraryFetch(path, { method: "PUT", body: JSON.stringify({ file_b64: bytesToBase64(bytes) } satisfies UploadPdfBody) });
         } catch (e) {
           console.error("PDF attach failed (non-fatal):", e);
         }

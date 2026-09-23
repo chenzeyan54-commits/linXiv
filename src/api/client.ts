@@ -15,7 +15,7 @@ export const isTauri =
 export const BASE_URL = "";
 
 // Webviews can't send a multipart body through Tauri `invoke`, so file uploads
-// travel as a base64 `file_b64` JSON field instead.
+// travel as a base64 `file_b64` JSON field (in the browser too: the dev shim is JSON-only).
 export { bytesToBase64 } from "../lib/base64.ts";
 
 export class ApiError extends Error {
@@ -85,8 +85,6 @@ export function buildInvoke(
     : { cmd: "api", args: { req } };
 }
 
-// Tauri never reaches here with FormData — uploads send base64 JSON, so the
-// FormData branch in apiFetch is the browser-dev path only.
 async function invokeApi<T>(
   path: string,
   init: RequestInit | undefined,
@@ -112,20 +110,15 @@ export async function apiFetch<T>(
     // Remote backends only exist in the desktop app (iroh lives in-process).
     if (!isTauri)
       throw new ApiError(500, "Remote backends require the desktop app");
-    if (init?.body instanceof FormData)
-      throw new ApiError(400, "Uploads aren't supported on a remote backend");
     return invokeApi<T>(path, init, backend);
   }
-  if (isTauri && !(init?.body instanceof FormData)) {
+  if (isTauri) {
     return invokeApi<T>(path, init, null);
   }
   const url = `${BASE_URL}${path}`;
-  const isFormData = init?.body instanceof FormData;
   const response = await fetch(url, {
     ...init,
-    headers: isFormData
-      ? init?.headers
-      : { "Content-Type": "application/json", ...init?.headers },
+    headers: { "Content-Type": "application/json", ...init?.headers },
   });
 
   if (!response.ok) {
