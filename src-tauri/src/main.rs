@@ -5,6 +5,8 @@ use linxiv_app::route::share::ShareState;
 use linxiv_app::state::AppState;
 use linxiv_app::{commands, integrations, protocol, remote_backend, route};
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
 use tracing_subscriber::EnvFilter;
@@ -176,22 +178,39 @@ fn main() {
         .run(|app, event| {
             // Explicit async teardown of the iroh endpoint + router on exit; Drop
             // alone can't run the async close.
-            if let tauri::RunEvent::ExitRequested { .. } = event {
-                if let Some(share) = app.try_state::<ShareState>() {
-                    // Bounded teardown: Router::shutdown can wait on draining handlers,
-                    // so cap it and let exit proceed if it overruns. The timeout future
-                    // is built inside the async block so its timer registers within the
-                    // runtime — constructing it outside block_on panics "no reactor".
-                    let teardown = tauri::async_runtime::block_on(async {
-                        tokio::time::timeout(std::time::Duration::from_secs(5), share.shutdown())
-                            .await
-                    });
-                    match teardown {
-                        Ok(Err(e)) => eprintln!("share node shutdown error: {e}"),
-                        Err(_) => eprintln!("share node shutdown timed out; abandoning"),
-                        Ok(Ok(())) => {}
-                    }
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
+                if app.try_state::<ShareState>().is_none() {
+                    return;
                 }
+                // Restart can't be prevented: tear down inline.
+                if code == Some(tauri::RESTART_EXIT_CODE) {
+                    let share = app.state::<ShareState>();
+                    tauri::async_runtime::block_on(shutdown_share(&share));
+                    return;
+                }
+                // Blocking here stalls the main loop, so the closed window stays
+                // on screen until teardown ends. Tear down off-thread, then
+                // re-request exit; the latch lets that second request through.
+                static TEARDOWN_STARTED: AtomicBool = AtomicBool::new(false);
+                if TEARDOWN_STARTED.swap(true, Ordering::SeqCst) {
+                    return;
+                }
+                api.prevent_exit();
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    shutdown_share(&app.state::<ShareState>()).await;
+                    app.exit(code.unwrap_or(0));
+                });
             }
         });
+}
+
+/// Bounded share teardown: Router::shutdown can wait on draining handlers, so
+/// cap it and let exit proceed if it overruns.
+async fn shutdown_share(share: &ShareState) {
+    match tokio::time::timeout(std::time::Duration::from_secs(5), share.shutdown()).await {
+        Ok(Err(e)) => eprintln!("share node shutdown error: {e}"),
+        Err(_) => eprintln!("share node shutdown timed out; abandoning"),
+        Ok(Ok(())) => {}
+    }
 }
